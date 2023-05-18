@@ -1,0 +1,516 @@
+***********Simulations (explaining Stata code step by step)
+
+global data = "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results"
+
+global outcome_model_HR1= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0            fh_CVD  BMI0"
+global outcome_model_HR2= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t              sex age diuretics1            fh_CVD  BMI0 sm_cess1"
+global outcome_model_HR3= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1"
+
+global outcome_model_rc1= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0            fh_CVD  BMI0"
+global outcome_model_rc2= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t              sex age diuretics1            fh_CVD  BMI0 sm_cess1"
+global outcome_model_rc3= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1"
+
+
+
+
+
+clear all
+
+global datasetnum = 1
+
+capture program drop sim_weight_change
+program sim_weight_change, rclass
+clear 
+
+
+set obs 10000
+gen id=_n
+
+*simulate smoking status at baseline so that
+* 32% non smokers
+* 20% former smokers
+* 48% current smokers
+
+gen a=rbinomial(1,0.2)
+gen b=rbinomial(1,0.6) if a==0
+replace b=0 if a==1
+gen sm_status0=a+2*b
+count if sm_status0==0
+return scalar sm_status0_0=r(N)
+count if sm_status0==1
+return scalar sm_status0_1=r(N)
+count if sm_status0==2
+return scalar sm_status0_2=r(N)
+
+*simulate sex
+gen sex=rbinomial(1,0.5)
+count if sex==0
+return scalar sex0_0=r(N)
+
+*simulate age
+gen age=rnormal(50,2.5)
+sum age, d
+return scalar age_m=r(mean)
+return scalar age_sd=r(sd)
+
+*simulate family history of CVD 
+gen fh_CVD=uniform()<+0.12+rnormal(0,0.05)
+sum fh_CVD, d
+
+return scalar fh_CVD_m=r(mean)
+
+
+*simulate diuretics 
+gen diuretics0=uniform()<-1.4+0.03*age+0.1*sex+rnormal(0,0.04)
+sum diuretics0, d
+
+return scalar diuretics0_m=r(mean)
+
+*simulate initial BMI at baseline
+gen BMI0=25.8+0.06*(age-18)+0.1*sex+0.5*fh_CVD-0.1*sm_status0-0.2*diuretics0+rnormal(0,0.56)  
+sum BMI0, d
+
+return scalar BMI0_m=r(mean)
+return scalar BMI0_sd=r(sd)
+
+
+*simulate smoking cessation between baseline and the 1st follow-up 
+gen     sm_cess1=0 if b==0
+replace sm_cess1=uniform()<-1.8+0.041*age-0.01*sex+rnormal(0,0.04)+0.2*diuretics0  if b==1
+sum sm_cess1, d
+
+return scalar sm_cess1_m=r(mean)
+
+*generate smoking status 1st follow-up, given smoking status at baseline  and smoking cessation 
+gen     sm_status1=sm_status0
+replace sm_status1=1 if sm_status0==2 & sm_cess1==1
+
+*simulate diuretics at 1st follow-up 
+gen 	diuretics1=uniform()<-1.4+0.03*age+0.1*sex+0.1*diuretics0+rnormal(0,0.04)
+sum diuretics1, d
+
+return scalar diuretics1_m=r(mean)
+
+*simulate CVD (outcome) at 1st follow-up 
+gen     CVD1=uniform()<-1.9+0.035*age+0.03*sex+rnormal(0,0.03) +0.3*fh_CVD+0.1*diuretics0
+sum CVD1, d
+
+return scalar CVD1_m=r(mean)
+
+*simulate BMI at 1st follow-up
+gen     BMI1=BMI0-0.9*CVD1+ 0.1* sm_status0 +2.5*sm_cess1-1.8*diuretics0-0.9*diuretics1+0.005*age+rnormal(0,1.4)  
+
+
+* simulate height
+gen     height=rnormal(1.63,0.03) if sex==0
+replace height=rnormal(1.80,0.03) if sex==1
+
+sum height if sex==0, d
+return scalar height_f_m=r(mean)
+return scalar height_f_sd=r(sd)
+
+sum height if sex==1, d
+return scalar height_m_m=r(mean)
+return scalar height_m_sd=r(sd)
+
+* generate weight
+gen     weight0=BMI0*(height)^2
+gen     weight1=BMI1*(height)^2
+
+sum weight0 if sex==0, d
+return scalar weight0_f_m=r(mean)
+return scalar weight0_f_sd=r(sd)
+
+sum weight0 if sex==1, d
+return scalar weight0_m_m=r(mean)
+return scalar weight0_m_sd=r(sd)
+
+
+*generate BMI change and BMI change categories
+gen     weight_change=weight1-weight0
+
+gen     weight_change_cat=1 if weight_change/weight0 < - 0.05
+replace weight_change_cat=2 if weight_change/weight0 >= - 0.05 & weight_change/weight0 <= 0.05
+replace weight_change_cat=3 if weight_change/weight0 > 0.05
+
+
+count if weight_change_cat==1
+return scalar weight_change_cat_1=r(N)
+count if weight_change_cat==2
+return scalar weight_change_cat_2=r(N)
+count if weight_change_cat==3
+return scalar weight_change_cat_3=r(N)
+
+
+*generate BMI loss, maintenance and gain from BMI change categories
+gen      weight_loss=0
+replace  weight_loss=1  if weight_change_cat==1
+gen      weight_maint=0
+replace  weight_maint=1 if weight_change_cat==2
+gen      weight_gain=0
+replace  weight_gain=1  if weight_change_cat==3
+
+*save  dataset with everybody
+save "$data\Datasets\All (without stime)_$datasetnum.dta", replace
+
+* keep only those with CVD cases that happened during the baseline period
+keep if CVD1==1
+
+save "$data\Datasets\CVD at baseline period_$datasetnum.dta", replace
+
+*use dataset with everybody
+use "$data\Datasets\All (without stime)_$datasetnum.dta", replace
+
+* keep only those without CVD cases that happened during the baseline period
+keep if CVD1==0
+
+*simulate survival time assuming no effect of BMI loss vs maintenance (lambda=0.0000001 and gamma=1.6 from the Weibull distribution)
+survsim stime , lambdas(0.0001) gammas(1.1)  covariates(a 1 b 1.5 sex 0.2 age 0.03 diuretics0 0.6 diuretics1 0.2 fh_CVD 0.2 BMI0 0.02  sm_cess1 -0.4 weight_gain 0.3) 
+
+*the follow-up time of the modelling period is 18 years
+generate CVD = stime <= 18
+replace stime = 18 if CVD == 0
+
+*save dataset without CVD during baseline period
+save "$data\Datasets\No CVD at baseline period (with stime)_$datasetnum.dta", replace
+
+*append data with individuals with CVD during baseline period
+append using "$data\Datasets\CVD at baseline period_$datasetnum.dta"
+
+*replace stime to 0, if it’s missing (for those individuals with CVD during the baseline period)
+replace stime=0 if stime==.
+replace CVD=1 if CVD1==1
+
+*generate new survival time, equal to stime+2 (to add the baseline period)
+gen surv_time=stime+2
+
+*save final dataset
+save "$data\Datasets\Final dataset_$datasetnum.dta", replace
+
+**************************************************
+
+use "$data\Datasets\Final dataset_$datasetnum.dta", replace
+
+expand 9
+
+sort id
+
+by id: gen obs_n=_n
+
+sort  id obs_n
+order id obs_n
+
+gen     CVD_pooled=0
+replace CVD_pooled=1 if CVD==1 & surv_time<=(obs_n+1)*2
+
+drop if CVD_pooled==1 & CVD_pooled[_n-1]==1 & id==id[_n-1]
+
+gen t=2*(obs_n-1)
+gen t2=t^2
+gen t3=t^3
+
+save "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
+
+*** Calculation of Hazard ratios
+
+* Method 1
+
+use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
+
+
+logistic CVD_pooled $outcome_model_HR1, cluster(id)
+return scalar m1_b_weight_loss=_b[1.weight_change_cat]
+return scalar m1_se_weight_loss=_se[1.weight_change_cat]
+return scalar m1_b_weight_gain=_b[3.weight_change_cat]
+return scalar m1_se_weight_gain=_se[3.weight_change_cat]
+
+
+
+logistic CVD_pooled $outcome_model_rc1, cluster(id)
+
+keep if t==0
+
+expand 9 if t==0
+
+bysort id: replace t=2*(_n-1)
+
+expand 3
+
+sort id t
+
+by id t: gen intervention=_n
+
+replace weight_loss=0
+replace weight_loss=1 if intervention==1
+
+replace weight_gain=0
+replace weight_gain=1 if intervention==3
+
+
+sort id intervention t
+
+predict p_event_k, pr
+gen     p_survival_k=1-p_event_k
+
+sort id intervention t
+gen p_survival=p_survival_k if t==0
+
+
+bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
+
+gen p_risk=1-p_survival
+by intervention, sort: summarize p_risk if t==16
+sort intervention t id
+by intervention t: egen p_mean_risk=mean(p_risk)
+
+expand 3 if t==0, generate(newtime)
+recode newtime 1=-1
+sort id intervention t newtime
+
+replace p_mean_risk=0 if newtime==-1 & t==0
+gen     time2=t+4
+replace time2=0 if newtime==-1 & t==0
+replace time2=2 if time2[_n-1]==0
+
+replace p_mean_risk=p_mean_risk*100
+separate p_mean_risk, by(intervention)
+
+keep if _n<=3*11
+keep p_mean_risk1 p_mean_risk2 p_mean_risk3 time2 
+
+
+forvalues i=0(2)20{
+	forvalues j=1(1)3{
+		sum p_mean_risk`j' if time2==`i'
+		return scalar m1_risk`j'_t`i'=r(mean)
+	}
+}
+
+save "$data\Datasets2\Results incidence curves (method 1)_$datasetnum.dta", replace
+
+
+* Method 2
+
+use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
+
+drop if CVD1==1
+
+logistic CVD_pooled $outcome_model_HR2, cluster(id)
+return scalar m2_b_weight_loss=_b[1.weight_change_cat]
+return scalar m2_se_weight_loss=_se[1.weight_change_cat]
+return scalar m2_b_weight_gain=_b[3.weight_change_cat]
+return scalar m2_se_weight_gain=_se[3.weight_change_cat]
+
+logistic CVD_pooled $outcome_model_rc2, cluster(id)
+
+keep if t==0
+
+expand 9 if t==0
+
+bysort id: replace t=2*(_n-1)
+
+expand 3
+
+sort id t
+
+by id t: gen intervention=_n
+
+replace weight_loss=0
+replace weight_loss=1 if intervention==1
+
+replace weight_gain=0
+replace weight_gain=1 if intervention==3
+
+
+sort id intervention t
+
+predict p_event_k, pr
+gen     p_survival_k=1-p_event_k
+
+sort id intervention t
+gen p_survival=p_survival_k if t==0
+
+
+bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
+
+gen p_risk=1-p_survival
+by intervention, sort: summarize p_risk if t==16
+sort intervention t id
+by intervention t: egen p_mean_risk=mean(p_risk)
+
+expand 2 if t==0, generate(newtime)
+sort id intervention t newtime
+
+replace p_mean_risk=0 if newtime==0 & t==0
+gen     time2=t+2
+replace time2=0 if newtime==0 & t==0
+
+replace p_mean_risk=p_mean_risk*100
+separate p_mean_risk, by(intervention)
+
+keep if _n<=3*10
+keep p_mean_risk1 p_mean_risk2 p_mean_risk3 time2 
+
+
+forvalues i=0(2)18{
+	forvalues j=1(1)3{
+		sum p_mean_risk`j' if time2==`i'
+		return scalar m2_risk`j'_t`i'=r(mean)
+	}
+}
+
+save "$data\Datasets2\Results incidence curves (method 2)_$datasetnum.dta", replace
+
+* Method 3
+
+use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
+
+drop if CVD1==1
+
+logistic CVD_pooled $outcome_model_HR3, cluster(id)
+return scalar m3_b_weight_loss=_b[1.weight_change_cat]
+return scalar m3_se_weight_loss=_se[1.weight_change_cat]
+return scalar m3_b_weight_gain=_b[3.weight_change_cat]
+return scalar m3_se_weight_gain=_se[3.weight_change_cat]
+
+logistic CVD_pooled $outcome_model_rc3, cluster(id)
+
+keep if t==0
+
+expand 9 if t==0
+
+bysort id: replace t=2*(_n-1)
+
+expand 3
+
+sort id t
+
+by id t: gen intervention=_n
+
+replace weight_loss=0
+replace weight_loss=1 if intervention==1
+
+replace weight_gain=0
+replace weight_gain=1 if intervention==3
+
+
+sort id intervention t
+
+predict p_event_k, pr
+gen     p_survival_k=1-p_event_k
+
+sort id intervention t
+gen p_survival=p_survival_k if t==0
+
+
+bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
+
+gen p_risk=1-p_survival
+by intervention, sort: summarize p_risk if t==16
+sort intervention t id
+by intervention t: egen p_mean_risk=mean(p_risk)
+
+expand 3 if t==0, generate(newtime)
+recode newtime 1=-1
+sort id intervention t newtime
+
+replace p_mean_risk=0 if newtime==-1 & t==0
+gen     time2=t+4
+replace time2=0 if newtime==-1 & t==0
+replace time2=2 if time2[_n-1]==0
+
+replace p_mean_risk=p_mean_risk*100
+separate p_mean_risk, by(intervention)
+
+keep if _n<=3*11
+keep p_mean_risk1 p_mean_risk2 p_mean_risk3 time2 
+
+forvalues i=0(2)20{
+	forvalues j=1(1)3{
+		sum p_mean_risk`j' if time2==`i'
+		return scalar m3_risk`j'_t`i'=r(mean)
+	}
+}
+
+save "$data\Datasets2\Results incidence curves (method 3)_$datasetnum.dta", replace
+
+global datasetnum = $datasetnum + 1
+
+
+end
+
+simulate sm_st0_0=r(sm_status0_0) sm_st0_1=r(sm_status0_1) sm_st0_2=r(sm_status0_2) ///
+		 sex_c=r(sex0_0) age_mean=r(age_m) age_sd=r(age_sd) fh_CVD_mean=r(fh_CVD_m) ///
+		 diuretics0_mean=r(diuretics0_m) BMI0_mean=r(BMI0_m) BMI0_sd=r(BMI0_sd) sm_cess1_mean=r(sm_cess1_m) ///
+		 diuretics1_mean=r(diuretics1_m) CVD1_mean=r(CVD1_m) height_f_mean=r(height_f_m) height_f_sd=r(height_f_sd) ///
+		 height_m_mean=r(height_m_m) height_m_sd=r(height_m_sd) weight0_f_mean=r(weight0_f_m) weight0_f_sd=r(weight0_f_sd) weight0_m_mean=r(weight0_m_m) weight0_m_sd=r(weight0_m_sd) ///
+		 wc_cat_1_c=r(weight_change_cat_1) wc_cat_2_c=r(weight_change_cat_2) wc_cat_3_c=r(weight_change_cat_3) ///
+		 m1_logHR_wl=r(m1_b_weight_loss) se_m1_logHR_wl=r(m1_se_weight_loss) m2_logHR_wl=r(m2_b_weight_loss) se_m2_logHR_wl=r(m2_se_weight_loss) m3_logHR_wl=r(m3_b_weight_loss) se_m3_logHR_wl=r(m3_se_weight_loss) ///
+         m1_logHR_wg=r(m1_b_weight_gain) se_m1_logHR_wg=r(m1_se_weight_gain) m2_logHR_wg=r(m2_b_weight_gain) se_m2_logHR_wg=r(m2_se_weight_gain) m3_logHR_wg=r(m3_b_weight_gain) se_m3_logHR_wg=r(m3_se_weight_gain) ///
+         m1_risk_wl=r(m1_risk1_t20) m1_risk_wm=r(m1_risk2_t20) m1_risk_wg=r(m1_risk3_t20) ///
+         m2_risk_wl=r(m2_risk1_t18) m2_risk_wm=r(m2_risk2_t18) m2_risk_wg=r(m2_risk3_t18) ///
+         m3_risk_wl=r(m3_risk1_t20) m3_risk_wm=r(m3_risk2_t20) m3_risk_wg=r(m3_risk3_t20) ///
+, dots(1) reps(1000) seed(11051982): sim_weight_change
+
+
+save "$data/Final Results (simulations)_v4.dta", replace
+
+
+
+
+
+
+generate rmse_m1 = (m1_logHR_wl-0)^2
+generate bias_m1 = (m1_logHR_wl-0)
+generate coverage_m1 = (m1_logHR_wl + invnorm(0.975)*se_m1_logHR_wl>0 & m1_logHR_wl - invnorm(0.975)*se_m1_logHR_wl<0)
+
+generate rmse_m2 = (m2_logHR_wl-0)^2
+generate bias_m2 = (m2_logHR_wl-0)
+generate coverage_m2 = (m2_logHR_wl + invnorm(0.975)*se_m2_logHR_wl>0 & m2_logHR_wl - invnorm(0.975)*se_m2_logHR_wl<0)
+
+generate rmse_m3 = (m3_logHR_wl-0)^2
+generate bias_m3 = (m3_logHR_wl-0)
+generate coverage_m3 = (m3_logHR_wl + invnorm(0.975)*se_m3_logHR_wl>0 & m3_logHR_wl - invnorm(0.975)*se_m3_logHR_wl<0)
+
+
+
+********************************************
+
+
+
+
+generate rmse_mg1 = (m1_logHR_wg-0.3)^2
+generate bias_mg1 = (m1_logHR_wg-0.3)
+generate coverage_mg1 = (m1_logHR_wg + invnorm(0.975)*se_m1_logHR_wg>0.3 & m1_logHR_wg - invnorm(0.975)*se_m1_logHR_wg<0.3)
+
+generate rmse_mg2 = (m2_logHR_wg-0.3)^2
+generate bias_mg2 = (m2_logHR_wg-0.3)
+generate coverage_mg2 = (m2_logHR_wg + invnorm(0.975)*se_m2_logHR_wg>0.3 & m2_logHR_wg - invnorm(0.975)*se_m2_logHR_wg<0.3)
+
+generate rmse_mg3 = (m3_logHR_wg-0.3)^2
+generate bias_mg3 = (m3_logHR_wg-0.3)
+generate coverage_mg3 = (m3_logHR_wg + invnorm(0.975)*se_m3_logHR_wg>0.3 & m3_logHR_wg - invnorm(0.975)*se_m3_logHR_wg<0.3)
+
+
+
+
+
+
+summarize rmse_m1 bias_m1 coverage_m1 rmse_m2 bias_m2 coverage_m2 rmse_m3 bias_m3 coverage_m3
+
+
+save "$data/Final Results_v3.dta", replace
+
+
+*********************************************************************************************************************************************
+*********************************************************************************************************************************************
+*********************************************************************************************************************************************
+
+
+
+
+summarize m1_logHR_wl bias_m1 coverage_m1 m2_logHR_wl bias_m2 coverage_m2 m3_logHR_wl bias_m3 coverage_m3
+
+summarize m1_logHR_wg bias_mg1 coverage_mg1 m2_logHR_wg bias_mg2 coverage_mg2 m3_logHR_wg bias_mg3 coverage_mg3
+
+
