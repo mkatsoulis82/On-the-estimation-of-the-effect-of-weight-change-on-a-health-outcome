@@ -17,7 +17,7 @@ global outcome_model_rc3= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weigh
 * Before running the code, please make sure that you create two extra folders in your desktop 
 * 1) $data\Datasets\
 * 2) $data\Datasets2\
-* so that all the simulated datasets can be stored from your script
+* so that all the simulated datasets can be stored from the following script
 
 clear all
 
