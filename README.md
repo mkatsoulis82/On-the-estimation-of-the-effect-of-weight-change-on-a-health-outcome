@@ -1,4 +1,4 @@
-# Simulation study in Stata
+# Simulation study
 
 We present a simulation study in Stata
 
