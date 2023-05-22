@@ -1,18 +1,23 @@
 ***********Simulations (explaining Stata code step by step)
 
+* Create a folder in which the simulated datasets will be saved will be saved
 global data = "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results"
 
+* Outcome models used for methods 1-3 to estimate the Hazard Ratios
 global outcome_model_HR1= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0            fh_CVD  BMI0"
 global outcome_model_HR2= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t              sex age diuretics1            fh_CVD  BMI0 sm_cess1"
 global outcome_model_HR3= "ib2.weight_change_cat   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1"
 
+* Outcome models used for methods 1-3 to estimate the incidence risk curves
 global outcome_model_rc1= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0            fh_CVD  BMI0"
 global outcome_model_rc2= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t              sex age diuretics1            fh_CVD  BMI0 sm_cess1"
 global outcome_model_rc3= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1"
 
 
-
-
+* Before running the code, please make sure that you create two extra folders in your desktop 
+* 1) $data\Datasets\
+* 2) $data\Datasets2\
+* so that all the simulated datasets can be stored from your script
 
 clear all
 
@@ -189,6 +194,7 @@ save "$data\Datasets\Final dataset_$datasetnum.dta", replace
 
 **************************************************
 
+* create a ready-to-analyse dataset in a long format, so that pooled logistic regression can be applied directly
 use "$data\Datasets\Final dataset_$datasetnum.dta", replace
 
 expand 9
@@ -200,20 +206,27 @@ by id: gen obs_n=_n
 sort  id obs_n
 order id obs_n
 
+* create the outcome variable CVD_pooled to be used in the pooled logistic regression
 gen     CVD_pooled=0
 replace CVD_pooled=1 if CVD==1 & surv_time<=(obs_n+1)*2
 
+*drop time point in which the outcome has already been observed in the previous time points
 drop if CVD_pooled==1 & CVD_pooled[_n-1]==1 & id==id[_n-1]
 
+* create variable for time, time^2 and time^3
 gen t=2*(obs_n-1)
 gen t2=t^2
 gen t3=t^3
 
+* save the dataset in a long format, so that pooled logistic regression can be applied
+
 save "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
 
-*** Calculation of Hazard ratios
+************
+* Method 1 *
+************
 
-* Method 1
+*** Calculation of the (log-)hazard ratios
 
 use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
 
@@ -225,14 +238,20 @@ return scalar m1_b_weight_gain=_b[3.weight_change_cat]
 return scalar m1_se_weight_gain=_se[3.weight_change_cat]
 
 
+*** Calculation of the risk curves
 
 logistic CVD_pooled $outcome_model_rc1, cluster(id)
+
+* Create a dataset with all time points for each treatment
+* Re-expand data for all treatments
 
 keep if t==0
 
 expand 9 if t==0
 
 bysort id: replace t=2*(_n-1)
+
+* Create 3 copies of each subjects, one for each treatment
 
 expand 3
 
@@ -249,20 +268,23 @@ replace weight_gain=1 if intervention==3
 
 sort id intervention t
 
+* Generate the probability of developing the event of interest "p_event_k" and the probability of remaining disease free "p_survival_k", which is 1-"p_event_k"
 predict p_event_k, pr
 gen     p_survival_k=1-p_event_k
 
+* The probability of remaining disease-free at time k is the product of the probabilities of remaining disease-free up to time t
 sort id intervention t
 gen p_survival=p_survival_k if t==0
-
-
 bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
 
+* The probability of the developing the event at time k is one minus the probability of remaining disease-free at time k
 gen p_risk=1-p_survival
 by intervention, sort: summarize p_risk if t==16
 sort intervention t id
 by intervention t: egen p_mean_risk=mean(p_risk)
 
+* We want to generate the graph of standardised risk curves over time, undr the 3 interventions
+* We need to average the adjusted risk curves across all values
 expand 3 if t==0, generate(newtime)
 recode newtime 1=-1
 sort id intervention t newtime
@@ -289,7 +311,11 @@ forvalues i=0(2)20{
 save "$data\Datasets2\Results incidence curves (method 1)_$datasetnum.dta", replace
 
 
-* Method 2
+************
+* Method 2 *
+************
+
+*** Calculation of the (log-)hazard ratios
 
 use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
 
@@ -301,14 +327,19 @@ return scalar m2_se_weight_loss=_se[1.weight_change_cat]
 return scalar m2_b_weight_gain=_b[3.weight_change_cat]
 return scalar m2_se_weight_gain=_se[3.weight_change_cat]
 
+*** Calculation of the risk curves
+
 logistic CVD_pooled $outcome_model_rc2, cluster(id)
 
+* Create a dataset with all time points for each treatment
+* Re-expand data for all treatments
 keep if t==0
 
 expand 9 if t==0
 
 bysort id: replace t=2*(_n-1)
 
+* Create 3 copies of each subjects, one for each treatment
 expand 3
 
 sort id t
@@ -324,20 +355,23 @@ replace weight_gain=1 if intervention==3
 
 sort id intervention t
 
+* Generate the probability of developing the event of interest "p_event_k" and the probability of remaining disease free "p_survival_k", which is 1-"p_event_k"
 predict p_event_k, pr
 gen     p_survival_k=1-p_event_k
 
+* The probability of remaining disease-free at time k is the product of the probabilities of remaining disease-free up to time t
 sort id intervention t
 gen p_survival=p_survival_k if t==0
-
-
 bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
 
+* The probability of the developing the event at time k is one minus the probability of remaining disease-free at time k
 gen p_risk=1-p_survival
 by intervention, sort: summarize p_risk if t==16
 sort intervention t id
 by intervention t: egen p_mean_risk=mean(p_risk)
 
+* We want to generate the graph of standardised risk curves over time, undr the 3 interventions
+* We need to average the adjusted risk curves across all values
 expand 2 if t==0, generate(newtime)
 sort id intervention t newtime
 
@@ -361,7 +395,11 @@ forvalues i=0(2)18{
 
 save "$data\Datasets2\Results incidence curves (method 2)_$datasetnum.dta", replace
 
-* Method 3
+************
+* Method 3 *
+************
+
+*** Calculation of the (log-)hazard ratios
 
 use "$data\Datasets\Final dataset (pooled)_$datasetnum.dta", replace
 
@@ -373,14 +411,19 @@ return scalar m3_se_weight_loss=_se[1.weight_change_cat]
 return scalar m3_b_weight_gain=_b[3.weight_change_cat]
 return scalar m3_se_weight_gain=_se[3.weight_change_cat]
 
+*** Calculation of the risk curves
+
 logistic CVD_pooled $outcome_model_rc3, cluster(id)
 
 keep if t==0
 
+* Create a dataset with all time points for each treatment
+* Re-expand data for all treatments
 expand 9 if t==0
 
 bysort id: replace t=2*(_n-1)
 
+* Create 3 copies of each subjects, one for each treatment
 expand 3
 
 sort id t
@@ -396,20 +439,24 @@ replace weight_gain=1 if intervention==3
 
 sort id intervention t
 
+* Generate the probability of developing the event of interest "p_event_k" and the probability of remaining disease free "p_survival_k", which is 1-"p_event_k"
 predict p_event_k, pr
 gen     p_survival_k=1-p_event_k
 
+* The probability of remaining disease-free at time k is the product of the probabilities of remaining disease-free up to time t
 sort id intervention t
 gen p_survival=p_survival_k if t==0
-
-
 bysort id intervention: replace p_survival=p_survival_k*p_survival[_n-1] if t>0
 
+* The probability of the developing the event at time k is one minus the probability of remaining disease-free at time k
 gen p_risk=1-p_survival
 by intervention, sort: summarize p_risk if t==16
 sort intervention t id
 by intervention t: egen p_mean_risk=mean(p_risk)
 
+* We want to generate the graph of standardised risk curves over time, undr the 3 interventions
+* We need to average the adjusted risk curves across all values
+* Important note: We add two time points (time=0 & time=1), so that the risk curves begin with p_risk(time==0)=0 & p_risk(time==1)=0
 expand 3 if t==0, generate(newtime)
 recode newtime 1=-1
 sort id intervention t newtime
@@ -452,25 +499,25 @@ simulate sm_st0_0=r(sm_status0_0) sm_st0_1=r(sm_status0_1) sm_st0_2=r(sm_status0
          m3_risk_wl=r(m3_risk1_t20) m3_risk_wm=r(m3_risk2_t20) m3_risk_wg=r(m3_risk3_t20) ///
 , dots(1) reps(1000) seed(11051982): sim_weight_change
 
-
-save "$data/Final Results (simulations)_v4.dta", replace
-
-
+* save the results
+save "$data/Final Results (simulation study).dta", replace
 
 
 
 
-generate rmse_m1 = (m1_logHR_wl-0)^2
-generate bias_m1 = (m1_logHR_wl-0)
-generate coverage_m1 = (m1_logHR_wl + invnorm(0.975)*se_m1_logHR_wl>0 & m1_logHR_wl - invnorm(0.975)*se_m1_logHR_wl<0)
 
-generate rmse_m2 = (m2_logHR_wl-0)^2
-generate bias_m2 = (m2_logHR_wl-0)
-generate coverage_m2 = (m2_logHR_wl + invnorm(0.975)*se_m2_logHR_wl>0 & m2_logHR_wl - invnorm(0.975)*se_m2_logHR_wl<0)
 
-generate rmse_m3 = (m3_logHR_wl-0)^2
-generate bias_m3 = (m3_logHR_wl-0)
-generate coverage_m3 = (m3_logHR_wl + invnorm(0.975)*se_m3_logHR_wl>0 & m3_logHR_wl - invnorm(0.975)*se_m3_logHR_wl<0)
+generate rmse_wl_1 = (m1_logHR_wl-0)^2
+generate bias_wl_1 = (m1_logHR_wl-0)
+generate coverage_wl_1 = (m1_logHR_wl + invnorm(0.975)*se_m1_logHR_wl>0 & m1_logHR_wl - invnorm(0.975)*se_m1_logHR_wl<0)
+
+generate rmse_wl_2 = (m2_logHR_wl-0)^2
+generate bias_wl_2 = (m2_logHR_wl-0)
+generate coverage_wl_2 = (m2_logHR_wl + invnorm(0.975)*se_m2_logHR_wl>0 & m2_logHR_wl - invnorm(0.975)*se_m2_logHR_wl<0)
+
+generate rmse_wl_3 = (m3_logHR_wl-0)^2
+generate bias_wl_3 = (m3_logHR_wl-0)
+generate coverage_wl_3 = (m3_logHR_wl + invnorm(0.975)*se_m3_logHR_wl>0 & m3_logHR_wl - invnorm(0.975)*se_m3_logHR_wl<0)
 
 
 
@@ -479,25 +526,36 @@ generate coverage_m3 = (m3_logHR_wl + invnorm(0.975)*se_m3_logHR_wl>0 & m3_logHR
 
 
 
-generate rmse_mg1 = (m1_logHR_wg-0.3)^2
-generate bias_mg1 = (m1_logHR_wg-0.3)
-generate coverage_mg1 = (m1_logHR_wg + invnorm(0.975)*se_m1_logHR_wg>0.3 & m1_logHR_wg - invnorm(0.975)*se_m1_logHR_wg<0.3)
+generate rmse_wg_1 = (m1_logHR_wg-0.3)^2
+generate bias_wg_1 = (m1_logHR_wg-0.3)
+generate coverage_wg_1 = (m1_logHR_wg + invnorm(0.975)*se_m1_logHR_wg>0.3 & m1_logHR_wg - invnorm(0.975)*se_m1_logHR_wg<0.3)
 
-generate rmse_mg2 = (m2_logHR_wg-0.3)^2
-generate bias_mg2 = (m2_logHR_wg-0.3)
-generate coverage_mg2 = (m2_logHR_wg + invnorm(0.975)*se_m2_logHR_wg>0.3 & m2_logHR_wg - invnorm(0.975)*se_m2_logHR_wg<0.3)
+generate rmse_wg_2 = (m2_logHR_wg-0.3)^2
+generate bias_wg_2 = (m2_logHR_wg-0.3)
+generate coverage_wg_2 = (m2_logHR_wg + invnorm(0.975)*se_m2_logHR_wg>0.3 & m2_logHR_wg - invnorm(0.975)*se_m2_logHR_wg<0.3)
 
-generate rmse_mg3 = (m3_logHR_wg-0.3)^2
-generate bias_mg3 = (m3_logHR_wg-0.3)
-generate coverage_mg3 = (m3_logHR_wg + invnorm(0.975)*se_m3_logHR_wg>0.3 & m3_logHR_wg - invnorm(0.975)*se_m3_logHR_wg<0.3)
-
-
-********************************************
+generate rmse_wg_3 = (m3_logHR_wg-0.3)^2
+generate bias_wg_3 = (m3_logHR_wg-0.3)
+generate coverage_wg_3 = (m3_logHR_wg + invnorm(0.975)*se_m3_logHR_wg>0.3 & m3_logHR_wg - invnorm(0.975)*se_m3_logHR_wg<0.3)
 
 
 
-summarize m1_logHR_wl bias_m1 coverage_m1 m2_logHR_wl bias_m2 coverage_m2 m3_logHR_wl bias_m3 coverage_m3
 
-summarize m1_logHR_wg bias_mg1 coverage_mg1 m2_logHR_wg bias_mg2 coverage_mg2 m3_logHR_wg bias_mg3 coverage_mg3
+
+* check results from the simulation
+
+summarize m1_logHR_wl bias_wl_1 coverage_wl_1    m2_logHR_wl bias_wl_2 coverage_wl_2    m3_logHR_wl bias_wl_3 coverage_wl_3
+
+summarize m1_logHR_wg bias_wg_1 coverage_wg_1    m2_logHR_wg bias_wg_2 coverage_wg_2    m3_logHR_wg bias_wg_3 coverage_wg_3
+
+
+save "$data/Final Results.dta", replace
+
+
+*********************************************************************************************************************************************
+*********************************************************************************************************************************************
+*********************************************************************************************************************************************
+
+
 
 
