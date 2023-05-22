@@ -1,1 +1,42 @@
+* Create a folder in which the simulated datasets will be saved will be saved
+global data = "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results"
+
+* Open the simulated dataset from github
+use "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results\Datasets\Final dataset_1.dta", replace
+
+
+* Fit a multinomial logistic regression model, weight change as dependent variable (in 3 categories: weight loss, maintenance and gain) 
+* and adjust for all potential confounders, both from the enrolment as well as from the follow-up, 
+* and predict the conditional probability of weight loss, maintenance and gain [(pr(A/L); A=weight change group, L=confounders]
+
+mlogit weight_change_cat  i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1
+forvalues i=1(1)3{
+	predict pr_m3_weight_change_`i', outcome(`i')
+}
+
+gen pr_m3_weight_change=pr_m3_weight_change_1*(weight_change_cat==1) + pr_m3_weight_change_2*(weight_change_cat==2) +pr_m3_weight_change_3*(weight_change_cat==3)
+
+* Fit a multinomial logistic regression model, weight change as dependent variable (in 3 categories: weight loss, maintenance and gain) 
+* without adjusting for any confounder and predict the conditional probability of weight loss, maintenance and gain [(pr(A); A=weight change group]
+
+mlogit weight_change_cat
+forvalues i=1(1)3{
+	predict pr_m3_weight_change0_`i', outcome(`i')
+}
+
+gen pr_m3_weight_change0=pr_m3_weight_change0_1*(weight_change_cat==1) + pr_m3_weight_change0_2*(weight_change_cat==2) +pr_m3_weight_change0_3*(weight_change_cat==3)
+
+
+* Generate stabilized weights as IPW=pr(A)/pr(A|L)
+
+gen IPW_m3=pr_m3_weight_change0/pr_m3_weight_change
+
+sum IPW_m3*
+
+* Calculate a weighted Kaplan-Meier estimator, using as weights for each individual the IPW before producing the Kaplan-Meier curves
+
+stset surv_time if CVD1==0 [pw=IPW_m3], failure(CVD = 1) 
+
+
+sts graph  , by(weight_change_cat)  fail ylabel(0(0.02)0.12) legend( order(1 "weight loss" 2 "weight maintenance" 3 "weight gain"))
 
