@@ -90,4 +90,17 @@ Combining information on weight1 and weight0, we created the 3 categories of wei
 (weight1- weight0)/ weight0 >5%
 
 ### Time to event data
-We then simulated time to event data for the next 18 years from a Weibull distribution with lambda 10^(-4) and gamma 1.1 and the following log hazard ratio for the covariates (Table S4), after deleting the participants that developed CVD between time zero and the 1st follow-up.
+We then simulated time to event data for the next 18 years from a Weibull distribution with lambda 10^(-4) and gamma 1.1 and the following log hazard ratio for the covariates (Table S4), after deleting the participants that developed CVD between time zero and the 1st follow-up
+
+
+# Weighted Kaplan-Meier curves
+
+We run an example in Stata
+We present how we can estimate the Weighted Kaplan-Meier curves using IPW from the 1st simulated dataset "Final dataset_1" from the "simulation study" script
+
+
+# Risk Curves using the g-formula
+
+We run an example in Stata
+We present how we can estimate the risk curves using the g-formula from the 1st simulated dataset (in a long format) "Final dataset (pooled)_1" from the "simulation study" script
+
