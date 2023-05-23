@@ -1,8 +1,8 @@
 * Create a folder in which the simulated datasets will be saved will be saved
 global data = "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results"
 
-* Open the simulated dataset from github
-use "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results\Datasets\Final dataset (pooled)_1.dta", replace
+* Open the simulated dataset "Final dataset (pooled)_1.dta" created from the "simulation study" script
+use "$data\Datasets\Final dataset (pooled)_1.dta", replace
 
 
 global outcome_model_rc3= "weight_loss weight_loss#c.t weight_loss#c.t#c.t weight_loss#c.t#c.t#c.t weight_gain weight_gain#c.t weight_gain#c.t#c.t weight_gain#c.t#c.t#c.t   c.t c.t#c.t c.t#c.t#c.t i.sm_status0 sex age diuretics0 diuretics1 fh_CVD  BMI0 sm_cess1"
