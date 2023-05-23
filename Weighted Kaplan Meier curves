@@ -1,7 +1,7 @@
 * Create a folder in which the simulated datasets will be saved will be saved
 global data = "C:\Users\micha\Desktop\Papers\New\Estimate change in a risk factor\Simulation\Final\Results"
 
-* Open the simulated dataset created from the "simulation study" script
+* Open the simulated dataset "Final dataset_1.dta" created from the "simulation study" script
 use "$data\Datasets\Final dataset_1.dta", replace
 
 
