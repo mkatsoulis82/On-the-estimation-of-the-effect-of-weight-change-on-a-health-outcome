@@ -1,6 +1,6 @@
 # Simulation study
 
-We present a simulation study in Stata
+We present a simulation study in Stata (script name "**Simulation study**")
 
 ## Simulated Data
 
@@ -95,14 +95,14 @@ We then simulated time to event data for the next 18 years from a Weibull distri
 
 # Weighted Kaplan-Meier curves
 
-We run an example in Stata (script "Weighted Kaplan Meier curves").
+We run an example in Stata (script "**Weighted Kaplan Meier curves**").
 
 We present how we can estimate the Weighted Kaplan-Meier curves using IPW from the 1st simulated dataset "Final dataset_1" from the "simulation study" script
 
 
 # Risk Curves using the g-formula
 
-We run an example in Stata (script "Risk Curves using the g-formula").
+We run an example in Stata (script "**Risk Curves using the g-formula**").
 
 We present how we can estimate the risk curves using the g-formula from the 1st simulated dataset (in a long format) "Final dataset (pooled)_1" from the "simulation study" script
 
